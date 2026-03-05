@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 function Navbar() {
   return (
@@ -9,15 +10,15 @@ function Navbar() {
       <div className="container">
 
         {/* Logo */}
-        <a className="navbar-brand" href="#">
+        <Link className="navbar-brand" to="/">
           <img 
             src="/media/image/logo.svg" 
             alt="logo" 
             style={{ width: "150px" }}
           />
-        </a>
+        </Link>
 
-        {/* Toggle button (mobile) */}
+        {/* Toggle button */}
         <button
           className="navbar-toggler"
           type="button"
@@ -32,23 +33,23 @@ function Navbar() {
           <ul className="navbar-nav gap-4">
 
             <li className="nav-item">
-              <a className="nav-link" href="#">Signup</a>
+              <Link className="nav-link" to="/signup">Signup</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#">About</a>
+              <Link className="nav-link" to="/about">About</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#">Products</a>
+              <Link className="nav-link" to="/product">Products</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#">Pricing</a>
+              <Link className="nav-link" to="/pricing">Pricing</Link>
             </li>
 
             <li className="nav-item">
-              <a className="nav-link" href="#">Support</a>
+              <Link className="nav-link" to="/support">Support</Link>
             </li>
 
           </ul>
