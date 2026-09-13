@@ -432,5 +432,5 @@ ZERODHA CLONE/
 
 ## Author
 
-Built by [Ritesh Kumar](https://github.com/muskan-773) — B.Tech CSE (2027 batch)  
+Built by [Muskan Kumari](https://github.com/muskan-773) — B.Tech CSE (2027 batch)  
 Stack: React · Node.js · Express · MongoDB · Socket.IO · Jest
