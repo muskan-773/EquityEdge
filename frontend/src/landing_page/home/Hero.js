@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 function Hero() {
   return ( 
@@ -26,12 +27,10 @@ function Hero() {
             ETFs, bonds, and more.
           </p>
 
-          {/* Button */}
-          <button 
-            className="btn btn-primary px-5 py-2 fs-5"
-          >
+          {/* Button — now routes to /signup instead of doing nothing */}
+          <Link to="/signup" className="btn btn-primary px-5 py-2 fs-5">
             Sign up for free
-          </button>
+          </Link>
 
         </div>
       </div>

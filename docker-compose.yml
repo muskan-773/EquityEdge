@@ -1,0 +1,128 @@
+# EquityEdge — Docker Compose Development Setup
+#
+# USAGE:
+#   Start all services:   docker-compose up --build
+#   Stop all services:    docker-compose down
+#   Stop + remove data:   docker-compose down -v
+#   View logs:            docker-compose logs -f backend
+#   Seed stocks:          docker-compose exec backend npm run seed
+#
+# SERVICES:
+#   mongodb   → MongoDB database (port 27017)
+#   backend   → Node.js/Express API (port 5000)
+#   frontend  → React marketing site (port 3000)
+#   dashboard → React trading dashboard (port 3001)
+#
+# WHY DOCKER COMPOSE? (Interview answer)
+# Without Docker Compose, setting up this project requires:
+#   1. Install MongoDB manually
+#   2. Start MongoDB manually
+#   3. Set environment variables manually
+#   4. npm install in 3 directories
+#   5. Start 3 processes manually
+#
+# With Docker Compose: `docker-compose up` does everything in one command.
+# Every developer and every CI environment gets an identical setup.
+# "Works on my machine" is no longer a problem.
+#
+# Interview Q: "What is the difference between Docker and Docker Compose?"
+# A: Docker builds and runs individual containers.
+#    Docker Compose orchestrates MULTIPLE containers as a single application.
+#    It defines the network between them, shared volumes, environment
+#    variables, and startup order. For local dev with multiple services
+#    (DB + API + 2 frontends), Compose is the right tool.
+#    Kubernetes is for production orchestration at scale.
+
+version: '3.9'
+
+services:
+  # ── MongoDB ──────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: equityedge-mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      # Named volume: data persists across `docker-compose down` (but not `down -v`)
+      - mongo_data:/data/db
+    environment:
+      # No auth for local dev — add MONGO_INITDB_ROOT_USERNAME/PASSWORD for staging
+      MONGO_INITDB_DATABASE: equityedge
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Backend API ───────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: equityedge-backend
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      # `mongodb` is the service name — Docker Compose resolves it as a hostname
+      MONGO_URI: mongodb://mongodb:27017/equityedge
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:3000
+      DASHBOARD_URL: http://localhost:3001
+      INITIAL_CASH_BALANCE: 1000000
+    depends_on:
+      mongodb:
+        condition: service_healthy   # Wait until MongoDB is actually ready
+    volumes:
+      # Bind mount source code for live reload (dev convenience)
+      # In production, remove this volume — use the built image
+      - ./backend:/app
+      # Prevent node_modules from being overwritten by the bind mount
+      - /app/node_modules
+    command: ['node', 'server.js']
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:5000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Frontend (Marketing Landing Site) ────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: equityedge-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:80'   # nginx listens on 80 inside container, we map to 3000
+    depends_on:
+      - backend
+
+  # ── Dashboard (Trading App) ───────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost:5000/api
+        REACT_APP_SOCKET_URL: http://localhost:5000
+    container_name: equityedge-dashboard
+    restart: unless-stopped
+    ports:
+      - '3001:80'
+    depends_on:
+      - backend
+
+# ── Named Volumes ─────────────────────────────────────────────────────────────
+# Persists MongoDB data between container restarts.
+# `docker-compose down` keeps the data.
+# `docker-compose down -v` deletes it (fresh start).
+volumes:
+  mongo_data:
+    driver: local

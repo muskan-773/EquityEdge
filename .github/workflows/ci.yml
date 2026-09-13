@@ -1,0 +1,162 @@
+# EquityEdge — GitHub Actions CI Pipeline
+#
+# WHAT THIS PIPELINE DOES:
+#   install → lint → test → build
+#
+# WHEN IT RUNS:
+#   - Every push to main or develop branch
+#   - Every pull request targeting main
+#
+# WHY CI MATTERS (interview answer):
+#   Without CI, a developer might push broken code without realising it.
+#   CI runs the same checks automatically on every push, in a clean
+#   environment. "Works on my machine" stops being an excuse.
+#   It also enforces the full test suite before code merges to main.
+#
+# ENVIRONMENT VARIABLES FOR TESTING:
+#   We use a real MongoDB instance provided by GitHub's `mongodb` service
+#   container. This means our integration tests run against a real DB,
+#   not a mock — giving us genuine confidence.
+#
+# Interview Q: "Why do you use a service container for MongoDB in CI?"
+# A: Service containers let you spin up real infrastructure (DBs, caches)
+#    alongside your test runner. Each CI run gets a fresh, isolated
+#    MongoDB instance. Tests are never polluted by previous runs.
+#    The alternative — mocking Mongoose — tests the mock, not the DB.
+
+name: EquityEdge CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Job 1: Backend (test + lint) ────────────────────────────────────────────
+  backend:
+    name: Backend — Install, Lint, Test
+    runs-on: ubuntu-latest
+
+    # MongoDB service container — available at localhost:27017 during the job
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        # Health check: wait until MongoDB is accepting connections
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Environment variables passed to all steps in this job
+    env:
+      NODE_ENV: test
+      PORT: 5000
+      MONGO_URI: mongodb://localhost:27017/equityedge_test
+      # Generate a fixed JWT secret for CI — never use this in production
+      JWT_SECRET: ci-test-jwt-secret-equityedge-2024
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:3000
+      DASHBOARD_URL: http://localhost:3001
+      INITIAL_CASH_BALANCE: 1000000
+
+    steps:
+      # ── Step 1: Checkout code ────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Step 2: Set up Node.js ────────────────────────────────────────────
+      # actions/setup-node also enables the built-in npm cache
+      - name: Set up Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      # ── Step 3: Install dependencies ─────────────────────────────────────
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      # ── Step 4: Lint ──────────────────────────────────────────────────────
+      # eslint is not currently in devDependencies — this step prints a
+      # friendly skip message if not available, rather than failing CI.
+      # Add eslint + config to package.json to activate this step.
+      - name: Lint (ESLint)
+        run: |
+          if [ -f "node_modules/.bin/eslint" ]; then
+            npx eslint . --ext .js --ignore-path .gitignore
+          else
+            echo "ESLint not installed — skipping lint step"
+          fi
+        working-directory: backend
+
+      # ── Step 5: Run tests ─────────────────────────────────────────────────
+      - name: Run backend tests
+        run: npm test
+        working-directory: backend
+
+      # ── Step 6: Upload coverage (optional, non-blocking) ─────────────────
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if tests fail — useful for debugging
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          retention-days: 7
+
+  # ── Job 2: Frontend build check ─────────────────────────────────────────────
+  frontend:
+    name: Frontend — Install & Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      # CI=false prevents warnings from being treated as errors by react-scripts
+      - name: Build frontend
+        run: CI=false npm run build
+        working-directory: frontend
+
+  # ── Job 3: Dashboard build check ────────────────────────────────────────────
+  dashboard:
+    name: Dashboard — Install & Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dashboard dependencies
+        run: npm ci
+        working-directory: dashboard
+
+      - name: Build dashboard
+        run: CI=false npm run build
+        working-directory: dashboard
+        env:
+          REACT_APP_API_URL: http://localhost:5000/api
+          REACT_APP_SOCKET_URL: http://localhost:5000

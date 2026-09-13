@@ -2,10 +2,13 @@ import React from 'react';
 import Hero from './Hero';
 import Stats from './Stats';
 import Pricing from './Pricing';
-import Eduacation from './Education';
+import Education from './Education';
 import OpenAccount from '../../OpenAccount';
-import Navbar from '../../Navbar';
-import Footer from '../../Footer';
+
+// BUG FIXED: Removed dead imports of Navbar and Footer.
+// They are already rendered in index.js — importing them here caused
+// duplication and added unnecessary bundle weight.
+// Also fixed: Eduacation → Education (typo in import alias)
 
 function HomePage() {
   return ( 
@@ -13,7 +16,7 @@ function HomePage() {
        <Hero />
        <Stats />
        <Pricing />
-       <Eduacation />
+       <Education />
        <OpenAccount />
     </>
    );
